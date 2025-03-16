@@ -11,16 +11,26 @@ import threading
 # 1) Dati statici dei 10 giocatori (caratteristiche fisse)
 ###############################################################################
 players_data = [
-    {"name": "Alex",   "anni_di_esperienza": 2,  "partite_vinte": 5,   "partite_perse": 3,  "form_index": 7},
-    {"name": "Bruno",  "anni_di_esperienza": 3,  "partite_vinte": 7,   "partite_perse": 2,  "form_index": 6},
-    {"name": "Carlo",  "anni_di_esperienza": 5,  "partite_vinte": 10,  "partite_perse": 5,  "form_index": 8},
-    {"name": "Dario",  "anni_di_esperienza": 1,  "partite_vinte": 3,   "partite_perse": 6,  "form_index": 5},
-    {"name": "Enea",   "anni_di_esperienza": 4,  "partite_vinte": 8,   "partite_perse": 3,  "form_index": 7},
-    {"name": "Fabio",  "anni_di_esperienza": 6,  "partite_vinte": 15,  "partite_perse": 9,  "form_index": 9},
-    {"name": "Gino",   "anni_di_esperienza": 2,  "partite_vinte": 4,   "partite_perse": 7,  "form_index": 4},
-    {"name": "Marco",  "anni_di_esperienza": 8,  "partite_vinte": 20,  "partite_perse": 10, "form_index": 10},
-    {"name": "Paolo",  "anni_di_esperienza": 5,  "partite_vinte": 12,  "partite_perse": 6,  "form_index": 7},
-    {"name": "Rocco",  "anni_di_esperienza": 2,  "partite_vinte": 4,   "partite_perse": 4,  "form_index": 5},
+    {"name": "Alex",     "anni_di_esperienza": 2,  "partite_vinte": 6,   "partite_perse": 4,  "form_index": 6},
+    {"name": "Bruno",    "anni_di_esperienza": 3,  "partite_vinte": 9,   "partite_perse": 3,  "form_index": 7},
+    {"name": "Carlo",    "anni_di_esperienza": 6,  "partite_vinte": 14,  "partite_perse": 6,  "form_index": 9},
+    {"name": "Dario",    "anni_di_esperienza": 1,  "partite_vinte": 2,   "partite_perse": 7,  "form_index": 4},
+    {"name": "Enea",     "anni_di_esperienza": 5,  "partite_vinte": 11,  "partite_perse": 4,  "form_index": 8},
+    {"name": "Fabio",    "anni_di_esperienza": 7,  "partite_vinte": 16,  "partite_perse": 10, "form_index": 10},
+    {"name": "Gino",     "anni_di_esperienza": 3,  "partite_vinte": 5,   "partite_perse": 8,  "form_index": 5},
+    {"name": "Marco",    "anni_di_esperienza": 9,  "partite_vinte": 21,  "partite_perse": 11, "form_index": 9},
+    {"name": "Paolo",    "anni_di_esperienza": 6,  "partite_vinte": 13,  "partite_perse": 7,  "form_index": 8},
+    {"name": "Rocco",    "anni_di_esperienza": 2,  "partite_vinte": 3,   "partite_perse": 5,  "form_index": 6},
+    {"name": "Federica", "anni_di_esperienza": 3,  "partite_vinte": 7,   "partite_perse": 4,  "form_index": 7},
+    {"name": "Rosita",   "anni_di_esperienza": 6,  "partite_vinte": 10,  "partite_perse": 5,  "form_index": 5},
+    {"name": "Michela",  "anni_di_esperienza": 7,  "partite_vinte": 12,  "partite_perse": 7,  "form_index": 9},
+    {"name": "Roberta",  "anni_di_esperienza": 4,  "partite_vinte": 6,   "partite_perse": 5,  "form_index": 6},
+    {"name": "Anna",     "anni_di_esperienza": 5,  "partite_vinte": 10,  "partite_perse": 4,  "form_index": 7},
+    {"name": "Lorena",   "anni_di_esperienza": 8,  "partite_vinte": 18,  "partite_perse": 10, "form_index": 8},
+    {"name": "Marlena",  "anni_di_esperienza": 3,  "partite_vinte": 8,   "partite_perse": 6,  "form_index": 5},
+    {"name": "Sara",     "anni_di_esperienza": 5,  "partite_vinte": 15,  "partite_perse": 8,  "form_index": 6},
+    {"name": "Maria",    "anni_di_esperienza": 6,  "partite_vinte": 14,  "partite_perse": 7,  "form_index": 7},
+    {"name": "Milena",   "anni_di_esperienza": 4,  "partite_vinte": 9,   "partite_perse": 6,  "form_index": 7},
 ]
 
 # Mischiamo i 10 giocatori in modo casuale
@@ -159,13 +169,46 @@ players_frame.pack(pady=10)
 
 player_labels = []
 
+# Contenitore principale con scroll
+main_frame = ttk.Frame(root)
+main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+# Creazione della Canvas per lo scrolling
+canvas = tk.Canvas(main_frame)
+scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+
+# Creiamo un frame interno per contenere i widget
+scrollable_frame = ttk.Frame(canvas)
+
+scrollable_frame.bind(
+    "<Configure>",
+    lambda e: canvas.configure(
+        scrollregion=canvas.bbox("all")  # Aggiorna regione scrollabile
+    )
+)
+
+# Collegamento tra canvas e frame
+canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+
+# Posizioniamo Canvas e Scrollbar nel frame principale
+canvas.pack(side="left", fill="both", expand=True)
+scrollbar.pack(side="right", fill="y")
+
+# Ora possiamo aggiungere i widget dentro `scrollable_frame`
+players_frame = ttk.Frame(scrollable_frame)
+players_frame.pack(pady=10)
+
+player_labels = []
+
 def create_player_labels():
     for i, player in enumerate(players_data):
         lbl = ttk.Label(players_frame, text="", style="TLabel")
         lbl.config(font=NORMAL_FONT, width=50, background="white", borderwidth=2, relief="groove")
-        lbl.grid(row=i // 2, column=i % 2, padx=5, pady=5, sticky="nsew")
+        lbl.grid(row=i, column=0, padx=5, pady=5, sticky="nsew")
         player_labels.append(lbl)
 
+players_frame.pack()
 create_player_labels()
 
 def refresh_player_labels():
