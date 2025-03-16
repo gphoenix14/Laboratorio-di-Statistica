@@ -39,16 +39,23 @@ else:
     first_captain, second_captain = captain2, captain1
 
 remaining_players = [p for p in players_data if p not in [captain1, captain2]]
-
 team_first = [first_captain]
 team_second = [second_captain]
 
 ###############################################################################
-# 3) Creazione GUI (finestra e stili)
+# 3) Liste globali per salvare l'andamento delle probabilità
+#    bayes_history[t][i] => probabilità bayesiana di i-esimo giocatore a "turno t"
+#    classic_history[t][i] => idem per probabilità classica
+###############################################################################
+bayes_history = []
+classic_history = []
+
+###############################################################################
+# 4) Creazione GUI (finestra e stili)
 ###############################################################################
 root = tk.Tk()
 root.title("Selezione Squadre - Distribuzione di Probabilità (Bayes vs Classica)")
-root.geometry("1200x800")
+root.geometry("1300x900")
 root.configure(bg="#F0F0F0")  # sfondo grigio chiaro
 
 # Stile ttk "moderno"
@@ -102,6 +109,12 @@ calc_prob_button.grid(row=0, column=0, padx=20)
 
 choice_button = ttk.Button(button_frame, text="Scelta (non bayesiana)")
 choice_button.grid(row=0, column=1, padx=20)
+
+stats_bayes_button = ttk.Button(button_frame, text="Stampa statistiche bayesiane")
+stats_bayes_button.grid(row=1, column=0, pady=10)
+
+stats_classic_button = ttk.Button(button_frame, text="Stampa statistiche classiche")
+stats_classic_button.grid(row=1, column=1, pady=10)
 
 ###############################################################################
 # Frame giocatori
@@ -170,7 +183,7 @@ def compute_synergy(player, chosen_players):
     dist += abs(player["partite_vinte"] - win_mean)
     dist += abs(player["form_index"] - form_mean)
     
-    return -dist  # synergy = -distanza
+    return -dist  # synergy = - distanza
 
 ###############################################################################
 # 1) build_bayesian_model_and_sample_all: restituisce TUTTE le probabilità (Bayes)
@@ -247,17 +260,14 @@ def compute_classic_probabilities(players_pool):
     
     scores = []
     for p in players_pool:
-        # Calcolo punteggio base
         base_score = (2.0 * p["partite_vinte"]
                       + p["anni_di_esperienza"]
                       + p["form_index"]
                       - 0.5 * p["partite_perse"])
         
         if base_score <= 0:
-            # se punteggio base <= 0, niente parte random
             extra = 0.0
         else:
-            # se punteggio base > 0, massimo 20% di base_score
             max_extra = 0.2 * base_score
             extra = random.uniform(0, max_extra)
         
@@ -314,6 +324,9 @@ def do_calcola_prob():
     Calcola (con PyMC) la distribuzione di probabilità su TUTTI i giocatori nel pool (Bayes)
     e la distribuzione classica (score normalizzato).
     Poi le mostra in una matrice (Bayes vs Classico) e in un grafico a barre.
+    
+    Inoltre, salviamo questi vettori in bayes_history e classic_history
+    per poter poi visualizzare l'andamento con i grafici a linee.
     """
     if not pool:
         info_label.config(text="Tutti i giocatori sono stati scelti. Non c'è più nessuno nel pool.")
@@ -326,15 +339,36 @@ def do_calcola_prob():
         bayes_probs = build_bayesian_model_and_sample_all(pool)
         classic_probs = compute_classic_probabilities(pool)
         
+        # Costruiamo un vettore di lunghezza 10 per ciascuno:
+        # Se un giocatore non è nel pool, la prob = 0
+        bayes_vector = [0.0]*len(players_data)
+        classic_vector = [0.0]*len(players_data)
+        
+        # Creiamo mappa (giocatore -> indice nel pool)
+        #  Così se players_data[i] è in pool[j], salviamo bayes_probs[j]
+        for i, p in enumerate(players_data):
+            if p in pool:
+                j = pool.index(p)
+                bayes_vector[i] = bayes_probs[j]
+                classic_vector[i] = classic_probs[j]
+            else:
+                # Non nel pool => 0
+                bayes_vector[i] = 0.0
+                classic_vector[i] = 0.0
+        
+        # Salviamo in history
+        bayes_history.append(bayes_vector)
+        classic_history.append(classic_vector)
+        
         def on_done():
             progress.stop()
             progress.pack_forget()
             
-            # Matrice di output (nome, bayes, classico)
+            # Matrice di output (nome, bayes, classico) per chi è attualmente nel pool
             txt_lines = []
-            for i, pl in enumerate(pool):
+            for j, pl in enumerate(pool):
                 txt_lines.append(
-                    f"{pl['name']}: Bayes={bayes_probs[i]:.3f}, Classico={classic_probs[i]:.3f}"
+                    f"{pl['name']}: Bayes={bayes_probs[j]:.3f}, Classico={classic_probs[j]:.3f}"
                 )
             matrix_output = "\n".join(txt_lines)
             
@@ -397,9 +431,70 @@ def do_scelta():
         choice_button.config(state="disabled")
 
 ###############################################################################
-# 6) Collega pulsanti e avvia mainloop
+# 6) Pulsanti "Stampa statistiche bayesiane" e "Stampa statistiche classiche"
+###############################################################################
+def do_stats_bayes():
+    """
+    Mostra un grafico a linee per l'andamento delle probabilità bayesiane di TUTTI i giocatori,
+    su tutti i 'turni' in cui è stato premuto 'Calcola Probabilità'.
+    bayes_history[t][i] => probabilità di i-esimo giocatore al 'turno' t.
+    """
+    if len(bayes_history) == 0:
+        info_label.config(text="Nessun dato bayesiano salvato (non hai mai premuto 'Calcola Probabilità'?).")
+        return
+    
+    # bayes_history è una lista di lunghezza (#chiamate),
+    # ogni elemento è un vettore di lunghezza 10 con le probabilità di ogni giocatore
+    n_turns = len(bayes_history)
+    x_values = range(1, n_turns+1)
+    
+    plt.figure(figsize=(10, 6))
+    plt.title("Andamento Probabilità Bayesiane (per giocatore)")
+    
+    for i in range(len(players_data)):
+        # Costruiamo la serie y = [ bayes_history[t][i] for t in ...]
+        y = [bayes_history[t][i] for t in range(n_turns)]
+        player_name = players_data[i]["name"]
+        plt.plot(x_values, y, label=player_name)
+    
+    plt.xlabel("Turno # (click Calcola Probabilità)")
+    plt.ylabel("Prob. Bayesiana")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+def do_stats_classic():
+    """
+    Mostra un grafico a linee per l'andamento delle probabilità classiche
+    di TUTTI i giocatori, su tutti i turni in cui è stato premuto 'Calcola Probabilità'.
+    """
+    if len(classic_history) == 0:
+        info_label.config(text="Nessun dato classico salvato (non hai mai premuto 'Calcola Probabilità'?).")
+        return
+    
+    n_turns = len(classic_history)
+    x_values = range(1, n_turns+1)
+    
+    plt.figure(figsize=(10, 6))
+    plt.title("Andamento Probabilità Classiche (per giocatore)")
+    
+    for i in range(len(players_data)):
+        y = [classic_history[t][i] for t in range(n_turns)]
+        player_name = players_data[i]["name"]
+        plt.plot(x_values, y, label=player_name)
+    
+    plt.xlabel("Turno # (click Calcola Probabilità)")
+    plt.ylabel("Prob. Classica (score normalizzato)")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+###############################################################################
+# 7) Colleghiamo i pulsanti e avviamo la GUI
 ###############################################################################
 calc_prob_button.config(command=do_calcola_prob)
 choice_button.config(command=do_scelta)
+stats_bayes_button.config(command=do_stats_bayes)
+stats_classic_button.config(command=do_stats_classic)
 
 root.mainloop()
