@@ -60,8 +60,8 @@ captain_prefs = ["esperienza", "vittorie", "forma", "perdite"]
 cap1_pref = random.choice(captain_prefs)
 cap2_pref = random.choice(captain_prefs)
 
-# K grande, es. K=15.0 => effetto molto evidente
-K = 15.0
+# K grande, es. K=7.0 => effetto molto evidente
+K = 7.0
 
 ###############################################################################
 # 3) Liste globali per tracciare l'andamento delle probabilità
