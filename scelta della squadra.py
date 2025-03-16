@@ -50,8 +50,8 @@ captain_prefs = ["esperienza", "vittorie", "forma", "perdite"]
 cap1_pref = random.choice(captain_prefs)
 cap2_pref = random.choice(captain_prefs)
 
-# K grande, es. K=9.0 => effetto molto evidente
-K = 9.0
+# K grande, es. K=15.0 => effetto molto evidente
+K = 15.0
 
 ###############################################################################
 # 3) Liste globali per tracciare l'andamento delle probabilità
@@ -280,13 +280,29 @@ def guess_preference_from_choices():
     }
 
 def build_bayesian_model_and_sample_all(players_pool):
+    """
+    Calcola la distribuzione di probabilità (Bayes) che ciascun giocatore in players_pool 
+    venga scelto al prossimo pick, analizzando le caratteristiche dei giocatori già scelti 
+    **nella squadra del capitano che sta per scegliere** (current_team) e quelle degli 
+    elementi ancora nel pool.
+    I prior per beta_xp, beta_win, beta_loss e beta_form sono adattati (tramite
+    guess_preference_from_choices) in base alle scelte passate (globali), ma per il calcolo
+    della "synergy" si considerano solo i giocatori nella squadra del capitano corrente.
+    """
     if not players_pool:
         return []
     
+    # Otteniamo il capitano che sta per scegliere e la sua squadra (current_team)
+    current_cap, current_team, current_pref = get_current_captain_and_team()
+    
+    # Per la "synergy" consideriamo solo i giocatori già scelti nella squadra del capitano corrente
+    chosen_current = current_team  # Esclude gli elementi dell'altra squadra
+    
+    # Usiamo la funzione guess_preference_from_choices() per ottenere i prior da usare
+    # (questa funzione analizza le scelte passate, come da versione originale)
     prefs = guess_preference_from_choices()
     
-    chosen_global = team_first + team_second
-    
+    # Prepariamo le liste con le caratteristiche per ogni giocatore nel pool
     xp_list = []
     wins_list = []
     losses_list = []
@@ -298,7 +314,8 @@ def build_bayesian_model_and_sample_all(players_pool):
         wins_list.append(pl["partite_vinte"])
         losses_list.append(pl["partite_perse"])
         form_list.append(pl["form_index"])
-        synergy_list.append(compute_synergy(pl, chosen_global))
+        # Qui la synergy viene calcolata **solo** in base ai giocatori della squadra del capitano corrente
+        synergy_list.append(compute_synergy(pl, chosen_current))
     
     xp_arr = np.array(xp_list)
     win_arr = np.array(wins_list)
@@ -308,9 +325,8 @@ def build_bayesian_model_and_sample_all(players_pool):
     
     with pm.Model() as model:
         alpha = pm.Normal("alpha", mu=0, sigma=2)
-        
-        beta_xp = pm.Normal("beta_xp",  mu=prefs["xp_mu"],    sigma=1)
-        beta_win = pm.Normal("beta_win", mu=prefs["win_mu"],  sigma=1)
+        beta_xp = pm.Normal("beta_xp", mu=prefs["xp_mu"], sigma=1)
+        beta_win = pm.Normal("beta_win", mu=prefs["win_mu"], sigma=1)
         beta_loss = pm.Normal("beta_loss", mu=prefs["loss_mu"], sigma=1)
         beta_form = pm.Normal("beta_form", mu=prefs["form_mu"], sigma=1)
         beta_syn = pm.Normal("beta_syn", mu=1, sigma=1)
@@ -345,8 +361,8 @@ def compute_classic_probabilities(players_pool):
             extra = 0.0
         else:
             max_extra = 0.2 * base_score
-            extra = random.uniform(0, max_extra)
-        
+            #extra = random.uniform(0, max_extra) commentato per togliere la parte di casualità
+            extra = 0 
         total_score = base_score + extra
         scores.append(total_score)
     
@@ -555,9 +571,9 @@ def update_next_captain_label():
     # prossimo pick => picks_done+1
     next_picks_done = picks_done + 1
     if next_picks_done % 2 == 0:
-        cpt = first_captain
-    else:
         cpt = second_captain
+    else:
+        cpt = first_captain
     next_captain_label.config(text=f"Prossima scelta: {cpt['name']}")
 
 # Mostriamo subito chi sceglie per primo
