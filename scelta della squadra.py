@@ -23,11 +23,11 @@ players_data = [
     {"name": "Rocco",  "anni_di_esperienza": 2,  "partite_vinte": 4,   "partite_perse": 4,  "form_index": 5},
 ]
 
-# Mischiamo l'ordine in modo casuale
+# Mischiamo i 10 giocatori in modo casuale
 random.shuffle(players_data)
 
 ###############################################################################
-# 2) Scelta dei due capitani e creazione squadre
+# 2) Seleziona i 2 capitani e crea le due squadre
 ###############################################################################
 two_captains = random.sample(players_data, 2)
 captain1, captain2 = two_captains[0], two_captains[1]
@@ -43,24 +43,33 @@ team_first = [first_captain]
 team_second = [second_captain]
 
 ###############################################################################
-# 3) Liste globali per salvare l'andamento delle probabilità
-#    bayes_history[t][i] => probabilità bayesiana di i-esimo giocatore a "turno t"
-#    classic_history[t][i] => idem per probabilità classica
+# 2b) Definiamo la preferenza "reale" di ciascun capitano
+###############################################################################
+# Possibili preferenze: "esperienza", "vittorie", "forma", "perdite"
+captain_prefs = ["esperienza", "vittorie", "forma", "perdite"]
+cap1_pref = random.choice(captain_prefs)
+cap2_pref = random.choice(captain_prefs)
+
+# K grande, es. K=9.0 => effetto molto evidente
+K = 9.0
+
+###############################################################################
+# 3) Liste globali per tracciare l'andamento delle probabilità
 ###############################################################################
 bayes_history = []
 classic_history = []
+chosen_history = []  # giocatori scelti (per "insegnare" al bayes come ragionare)
 
 ###############################################################################
-# 4) Creazione GUI (finestra e stili)
+# Creazione GUI
 ###############################################################################
 root = tk.Tk()
 root.title("Selezione Squadre - Distribuzione di Probabilità (Bayes vs Classica)")
 root.geometry("1300x900")
 root.configure(bg="#F0F0F0")  # sfondo grigio chiaro
 
-# Stile ttk "moderno"
 style = ttk.Style()
-style.theme_use("clam")  
+style.theme_use("clam")
 style.configure("TFrame", background="#F0F0F0")
 style.configure("TLabel", background="#F0F0F0", font=("Arial", 14))
 style.configure("TButton", font=("Arial", 14, "bold"), padding=10)
@@ -72,9 +81,7 @@ SMALL_FONT = ("Arial", 12)
 
 pool = remaining_players[:]
 
-###############################################################################
-# Frame superiore con etichette e progress bar
-###############################################################################
+# FRAME in alto
 top_frame = ttk.Frame(root, style="TFrame")
 top_frame.pack(pady=10)
 
@@ -94,12 +101,40 @@ prob_label = ttk.Label(top_frame, text="", style="TLabel")
 prob_label.config(font=BIG_FONT, foreground="blue")
 prob_label.pack(pady=5)
 
+# Label preferenze dei capitani
+pref_label = ttk.Label(top_frame, text="", style="TLabel")
+pref_label.config(font=BIG_FONT, foreground="purple")
+pref_label.pack(pady=5)
+
+def param_string(pref):
+    if pref=="esperienza":
+        return "Esperienza"
+    elif pref=="vittorie":
+        return "Vittorie"
+    elif pref=="forma":
+        return "Forma"
+    elif pref=="perdite":
+        return "Perdite (penalizzazione maggiore)"
+    else:
+        return pref
+
+pref_text = (
+    f"Capitano {first_captain['name']} privilegia: {param_string(cap1_pref)} (K={K})\n"
+    f"Capitano {second_captain['name']} privilegia: {param_string(cap2_pref)} (K={K})"
+)
+pref_label.config(text=pref_text)
+
 progress = ttk.Progressbar(top_frame, orient='horizontal', length=400, mode='indeterminate')
 progress.pack(pady=5)
 progress.pack_forget()
 
+# Label per mostrare CHI sceglie la prossima volta
+next_captain_label = ttk.Label(top_frame, text="", style="TLabel")
+next_captain_label.config(font=BIG_FONT, foreground="red")
+next_captain_label.pack(pady=5)
+
 ###############################################################################
-# Frame pulsanti
+# Frame con pulsanti
 ###############################################################################
 button_frame = ttk.Frame(root, style="TFrame")
 button_frame.pack(pady=10)
@@ -133,9 +168,6 @@ def create_player_labels():
 
 create_player_labels()
 
-###############################################################################
-# Funzioni di refresh
-###############################################################################
 def refresh_player_labels():
     for lbl, player in zip(player_labels, players_data):
         txt = (f"{player['name']} "
@@ -143,7 +175,7 @@ def refresh_player_labels():
                f"Lost={player['partite_perse']}, Form={player['form_index']})")
         lbl.config(text=txt, foreground="black", background="white")
     
-    # Capitani
+    # Capitani colorati
     for lbl, player in zip(player_labels, players_data):
         if player == first_captain:
             lbl.config(foreground="red")
@@ -159,14 +191,32 @@ def refresh_player_labels():
 refresh_player_labels()
 
 def get_current_captain_and_team():
+    # pick "attuale"
     picks_done = len(team_first) + len(team_second) - 2
     if picks_done % 2 == 0:
-        return first_captain, team_first
+        return first_captain, team_first, cap1_pref
     else:
-        return second_captain, team_second
+        return second_captain, team_second, cap2_pref
+
+def get_next_captain():
+    # prossimo pick => picks_done+1
+    picks_done = len(team_first) + len(team_second) - 2
+    next_picks_done = picks_done + 1
+    if next_picks_done % 2 == 0:
+        return first_captain
+    else:
+        return second_captain
+
+def update_next_captain_label():
+    if not pool:
+        next_captain_label.config(text="Tutti i giocatori scelti, nessun capitano successivo.")
+        return
+    # Calcoliamo chi sceglierà al prossimo giro
+    cpt = get_next_captain()
+    next_captain_label.config(text=f"Prossima scelta: {cpt['name']}")
 
 ###############################################################################
-# Calcolo synergy: gioca su xp, wins, form => -distanza
+# synergy invariato
 ###############################################################################
 def compute_synergy(player, chosen_players):
     if not chosen_players:
@@ -183,21 +233,57 @@ def compute_synergy(player, chosen_players):
     dist += abs(player["partite_vinte"] - win_mean)
     dist += abs(player["form_index"] - form_mean)
     
-    return -dist  # synergy = - distanza
+    return -dist
 
-###############################################################################
-# 1) build_bayesian_model_and_sample_all: restituisce TUTTE le probabilità (Bayes)
-###############################################################################
+def guess_preference_from_choices():
+    if len(chosen_history) == 0:
+        return {
+            "xp_mu": 1.0,
+            "win_mu": 2.0,
+            "loss_mu": -1.0,
+            "form_mu": 1.0
+        }
+    
+    xp_mean = np.mean([p["anni_di_esperienza"] for p in chosen_history])
+    win_mean = np.mean([p["partite_vinte"] for p in chosen_history])
+    form_mean = np.mean([p["form_index"] for p in chosen_history])
+    inv_loss_vals = [100 - p["partite_perse"] for p in chosen_history]
+    inv_loss_mean = np.mean(inv_loss_vals)
+    
+    vals = {
+        "xp_mean": xp_mean,
+        "win_mean": win_mean,
+        "inv_loss_mean": inv_loss_mean,
+        "form_mean": form_mean
+    }
+    best_param = max(vals, key=vals.get)
+    
+    xp_mu = 1.0
+    win_mu = 2.0
+    loss_mu = -1.0
+    form_mu = 1.0
+    
+    if best_param == "xp_mean":
+        xp_mu = 3.0
+    elif best_param == "win_mean":
+        win_mu = 4.0
+    elif best_param == "inv_loss_mean":
+        loss_mu = -2.0
+    elif best_param == "form_mean":
+        form_mu = 3.0
+    
+    return {
+        "xp_mu": xp_mu,
+        "win_mu": win_mu,
+        "loss_mu": loss_mu,
+        "form_mu": form_mu
+    }
+
 def build_bayesian_model_and_sample_all(players_pool):
-    """
-    Restituisce un vettore di probabilità (Bayes) che ciascun
-    giocatore in players_pool sia scelto ADESSO (prossimo pick).
-    Usa:
-      - xp, wins, losses, form
-      - synergy (rispetto a TUTTI i giocatori già scelti)
-    """
     if not players_pool:
         return []
+    
+    prefs = guess_preference_from_choices()
     
     chosen_global = team_first + team_second
     
@@ -223,10 +309,10 @@ def build_bayesian_model_and_sample_all(players_pool):
     with pm.Model() as model:
         alpha = pm.Normal("alpha", mu=0, sigma=2)
         
-        beta_xp = pm.Normal("beta_xp", mu=1, sigma=1)
-        beta_win = pm.Normal("beta_win", mu=2, sigma=1)
-        beta_loss = pm.Normal("beta_loss", mu=-1, sigma=1)
-        beta_form = pm.Normal("beta_form", mu=1, sigma=1)
+        beta_xp = pm.Normal("beta_xp",  mu=prefs["xp_mu"],    sigma=1)
+        beta_win = pm.Normal("beta_win", mu=prefs["win_mu"],  sigma=1)
+        beta_loss = pm.Normal("beta_loss", mu=prefs["loss_mu"], sigma=1)
+        beta_form = pm.Normal("beta_form", mu=prefs["form_mu"], sigma=1)
         beta_syn = pm.Normal("beta_syn", mu=1, sigma=1)
         
         score = (alpha
@@ -240,21 +326,11 @@ def build_bayesian_model_and_sample_all(players_pool):
         
         trace = pm.sample(draws=400, tune=200, chains=1, progressbar=False, random_seed=42)
     
-    posterior_probs = trace.posterior["probs"].values[0]  # shape = [n_draws, pool_size]
-    mean_probs = posterior_probs.mean(axis=0)             # shape = [pool_size,]
+    posterior_probs = trace.posterior["probs"].values[0]
+    mean_probs = posterior_probs.mean(axis=0)
     return mean_probs
 
-###############################################################################
-# 2) Calcolo "probabilità classiche" da uno score non bayesiano
-###############################################################################
 def compute_classic_probabilities(players_pool):
-    """
-    Calcola uno score deterministico per ogni giocatore, poi normalizza
-    per ottenere una "probabilità classica".
-    Lo score base:  2×win + xp + form - 0.5×lost
-    Poi la parte random = random(0, max_extra)
-    dove max_extra = 0.2 * (score base)  se score base > 0, altrimenti 0
-    """
     if not players_pool:
         return []
     
@@ -276,33 +352,43 @@ def compute_classic_probabilities(players_pool):
     
     sum_scores = sum(scores)
     if sum_scores <= 0:
-        # evitiamo divisione per zero, se fosse tutto <= 0
         return [1.0 / len(players_pool)] * len(players_pool)
     
-    classic_probs = [s / sum_scores for s in scores]
-    return classic_probs
+    return [s / sum_scores for s in scores]
 
-###############################################################################
-# 3) Scelta non bayesiana (euristica + random max 20% del punteggio base)
-###############################################################################
 def pick_next_player_non_bayesian(players_pool):
-    """
-    1) calcola base_score = (2×win + xp + form - 0.5×loss)
-    2) random extra = random(0, 0.2 * base_score) se base_score>0
-    3) score finale = base_score + extra
-    """
     if len(players_pool) == 1:
         return players_pool[0]
+    
+    # Leggiamo la preferenza del capitano
+    current_captain, current_team, current_pref = get_current_captain_and_team()
     
     best_score = float('-inf')
     best_player = None
     
     for p in players_pool:
+        # Punteggio base
         base_score = (2.0 * p["partite_vinte"]
                       + p["anni_di_esperienza"]
                       + p["form_index"]
                       - 0.5 * p["partite_perse"])
         
+        # Applichiamo K=9 se preferito
+        if current_pref == "vittorie":
+            delta = (K - 1.0)*(2.0 * p["partite_vinte"])
+            base_score += delta
+        elif current_pref == "esperienza":
+            delta = (K - 1.0)*(p["anni_di_esperienza"])
+            base_score += delta
+        elif current_pref == "forma":
+            delta = (K - 1.0)*(p["form_index"])
+            base_score += delta
+        elif current_pref == "perdite":
+            # penalizziamo ancor di più le partite perse
+            delta = (K - 1.0)*(-0.5 * p["partite_perse"])
+            base_score += delta
+        
+        # Componente random
         if base_score <= 0:
             extra = 0.0
         else:
@@ -310,24 +396,13 @@ def pick_next_player_non_bayesian(players_pool):
             extra = random.uniform(0, max_extra)
         
         final_score = base_score + extra
-        
         if final_score > best_score:
             best_score = final_score
             best_player = p
+    
     return best_player
 
-###############################################################################
-# 4) Funzione: Calcola e mostra la "matrice" di probabilità + doppio grafico a barre
-###############################################################################
 def do_calcola_prob():
-    """
-    Calcola (con PyMC) la distribuzione di probabilità su TUTTI i giocatori nel pool (Bayes)
-    e la distribuzione classica (score normalizzato).
-    Poi le mostra in una matrice (Bayes vs Classico) e in un grafico a barre.
-    
-    Inoltre, salviamo questi vettori in bayes_history e classic_history
-    per poter poi visualizzare l'andamento con i grafici a linee.
-    """
     if not pool:
         info_label.config(text="Tutti i giocatori sono stati scelti. Non c'è più nessuno nel pool.")
         return
@@ -339,24 +414,18 @@ def do_calcola_prob():
         bayes_probs = build_bayesian_model_and_sample_all(pool)
         classic_probs = compute_classic_probabilities(pool)
         
-        # Costruiamo un vettore di lunghezza 10 per ciascuno:
-        # Se un giocatore non è nel pool, la prob = 0
         bayes_vector = [0.0]*len(players_data)
         classic_vector = [0.0]*len(players_data)
         
-        # Creiamo mappa (giocatore -> indice nel pool)
-        #  Così se players_data[i] è in pool[j], salviamo bayes_probs[j]
         for i, p in enumerate(players_data):
             if p in pool:
                 j = pool.index(p)
                 bayes_vector[i] = bayes_probs[j]
                 classic_vector[i] = classic_probs[j]
             else:
-                # Non nel pool => 0
                 bayes_vector[i] = 0.0
                 classic_vector[i] = 0.0
         
-        # Salviamo in history
         bayes_history.append(bayes_vector)
         classic_history.append(classic_vector)
         
@@ -364,18 +433,16 @@ def do_calcola_prob():
             progress.stop()
             progress.pack_forget()
             
-            # Matrice di output (nome, bayes, classico) per chi è attualmente nel pool
-            txt_lines = []
-            for j, pl in enumerate(pool):
-                txt_lines.append(
-                    f"{pl['name']}: Bayes={bayes_probs[j]:.3f}, Classico={classic_probs[j]:.3f}"
-                )
-            matrix_output = "\n".join(txt_lines)
-            
             info_label.config(text="Distribuzione di probabilità: Bayes vs Classico (prossimo pick).")
-            prob_label.config(text=matrix_output)
             
-            # Grafico a barre: due serie (Bayes, Classico) affiancate
+            lines = []
+            lines.append("PROBABILITÀ CALCOLATE SUI GIOCATORI NEL POOL:\n")
+            for j, pl in enumerate(pool):
+                lines.append(f"{pl['name']}: Bayes={bayes_probs[j]:.3f}, Classico={classic_probs[j]:.3f}")
+            text_out = "\n".join(lines)
+            prob_label.config(text=text_out)
+            
+            # Grafico a barre di confronto
             x_labels = [p["name"] for p in pool]
             x = np.arange(len(pool))
             
@@ -396,55 +463,42 @@ def do_calcola_prob():
     
     threading.Thread(target=background_calc).start()
 
-###############################################################################
-# 5) Funzione: Esegue la scelta "reale"
-###############################################################################
 def do_scelta():
-    """
-    Esegue davvero la scelta del capitano di turno (non bayesiana).
-    Rimuove il giocatore scelto dal pool e lo mette nella squadra corrispondente.
-    """
     global pool
-    
     if not pool:
         info_label.config(text="Non ci sono più giocatori disponibili.")
         calc_prob_button.config(state="disabled")
         choice_button.config(state="disabled")
         return
     
-    current_captain, current_team = get_current_captain_and_team()
+    current_captain, current_team, current_pref = get_current_captain_and_team()
     picks_done = len(team_first) + len(team_second) - 2
     
     chosen_one = pick_next_player_non_bayesian(pool)
     current_team.append(chosen_one)
     pool.remove(chosen_one)
     
+    # Salviamo la scelta
+    chosen_history.append(chosen_one)
+    
     info_label.config(
         text=f"Pick #{picks_done+1} - Capitano {current_captain['name']} ha scelto: {chosen_one['name']}"
     )
     refresh_player_labels()
     
-    # Se finiamo i giocatori ...
     if not pool:
         info_label.config(text="Tutti i giocatori sono stati scelti. Fine selezioni.")
         calc_prob_button.config(state="disabled")
         choice_button.config(state="disabled")
+    else:
+        # Aggiorniamo la label con il prossimo capitano
+        update_next_captain_label()
 
-###############################################################################
-# 6) Pulsanti "Stampa statistiche bayesiane" e "Stampa statistiche classiche"
-###############################################################################
 def do_stats_bayes():
-    """
-    Mostra un grafico a linee per l'andamento delle probabilità bayesiane di TUTTI i giocatori,
-    su tutti i 'turni' in cui è stato premuto 'Calcola Probabilità'.
-    bayes_history[t][i] => probabilità di i-esimo giocatore al 'turno' t.
-    """
     if len(bayes_history) == 0:
         info_label.config(text="Nessun dato bayesiano salvato (non hai mai premuto 'Calcola Probabilità'?).")
         return
     
-    # bayes_history è una lista di lunghezza (#chiamate),
-    # ogni elemento è un vettore di lunghezza 10 con le probabilità di ogni giocatore
     n_turns = len(bayes_history)
     x_values = range(1, n_turns+1)
     
@@ -452,7 +506,6 @@ def do_stats_bayes():
     plt.title("Andamento Probabilità Bayesiane (per giocatore)")
     
     for i in range(len(players_data)):
-        # Costruiamo la serie y = [ bayes_history[t][i] for t in ...]
         y = [bayes_history[t][i] for t in range(n_turns)]
         player_name = players_data[i]["name"]
         plt.plot(x_values, y, label=player_name)
@@ -464,10 +517,6 @@ def do_stats_bayes():
     plt.show()
 
 def do_stats_classic():
-    """
-    Mostra un grafico a linee per l'andamento delle probabilità classiche
-    di TUTTI i giocatori, su tutti i turni in cui è stato premuto 'Calcola Probabilità'.
-    """
     if len(classic_history) == 0:
         info_label.config(text="Nessun dato classico salvato (non hai mai premuto 'Calcola Probabilità'?).")
         return
@@ -489,12 +538,29 @@ def do_stats_classic():
     plt.tight_layout()
     plt.show()
 
-###############################################################################
-# 7) Colleghiamo i pulsanti e avviamo la GUI
-###############################################################################
 calc_prob_button.config(command=do_calcola_prob)
 choice_button.config(command=do_scelta)
 stats_bayes_button.config(command=do_stats_bayes)
 stats_classic_button.config(command=do_stats_classic)
+
+# Definiamo e richiamiamo la update_next_captain_label iniziale
+next_captain_label = ttk.Label(top_frame, text="", style="TLabel", foreground="red", font=BIG_FONT)
+next_captain_label.pack(pady=5)
+
+def update_next_captain_label():
+    if not pool:
+        next_captain_label.config(text="Tutti i giocatori sono stati scelti.")
+        return
+    picks_done = len(team_first) + len(team_second) - 2
+    # prossimo pick => picks_done+1
+    next_picks_done = picks_done + 1
+    if next_picks_done % 2 == 0:
+        cpt = first_captain
+    else:
+        cpt = second_captain
+    next_captain_label.config(text=f"Prossima scelta: {cpt['name']}")
+
+# Mostriamo subito chi sceglie per primo
+update_next_captain_label()
 
 root.mainloop()
