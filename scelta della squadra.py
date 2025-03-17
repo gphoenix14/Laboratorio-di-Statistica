@@ -33,7 +33,7 @@ players_data = [
     {"name": "Milena",   "anni_di_esperienza": 4,  "partite_vinte": 9,   "partite_perse": 6,  "form_index": 7},
 ]
 
-# Mischiamo i 10 giocatori in modo casuale
+# Mischiamo i 20 giocatori in modo casuale
 random.shuffle(players_data)
 
 ###############################################################################
@@ -303,17 +303,17 @@ def guess_preference_from_choices():
     
     xp_mu = 1.0
     win_mu = 2.0
-    loss_mu = -1.0
+    loss_mu = -2.0
     form_mu = 1.0
     
     if best_param == "xp_mean":
-        xp_mu = 3.0
+        xp_mu = K
     elif best_param == "win_mean":
-        win_mu = 4.0
+        win_mu = K
     elif best_param == "inv_loss_mean":
-        loss_mu = -2.0
+        loss_mu = -K
     elif best_param == "form_mean":
-        form_mu = 3.0
+        form_mu = K
     
     return {
         "xp_mu": xp_mu,
