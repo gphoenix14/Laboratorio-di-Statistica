@@ -287,11 +287,11 @@ def guess_preference_from_choices():
             "form_mu": 1.0
         }
     
-    xp_mean = np.mean([p["anni_di_esperienza"] for p in chosen_history])
-    win_mean = np.mean([p["partite_vinte"] for p in chosen_history])
-    form_mean = np.mean([p["form_index"] for p in chosen_history])
-    inv_loss_vals = [100 - p["partite_perse"] for p in chosen_history]
-    inv_loss_mean = np.mean(inv_loss_vals)
+    xp_mean = abs(np.mean([p["anni_di_esperienza"] for p in chosen_history]))
+    win_mean = abs(np.mean([p["partite_vinte"] for p in chosen_history]))
+    form_mean = abs(np.mean([p["form_index"] for p in chosen_history]))
+    inv_loss_vals = abs(np.mean([p["partite_perse"] for p in chosen_history]))
+    inv_loss_mean = abs(np.mean(inv_loss_vals))
     
     vals = {
         "xp_mean": xp_mean,
@@ -307,13 +307,13 @@ def guess_preference_from_choices():
     form_mu = 1.0
     
     if best_param == "xp_mean":
-        xp_mu = K
+        xp_mu = xp_mu +1
     elif best_param == "win_mean":
-        win_mu = K
+        win_mu = win_mu +1
     elif best_param == "inv_loss_mean":
-        loss_mu = -K
+        loss_mu = -loss_mu + 1
     elif best_param == "form_mean":
-        form_mu = K
+        form_mu = form_mu + 1
     
     return {
         "xp_mu": xp_mu,
